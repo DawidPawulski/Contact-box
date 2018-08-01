@@ -1,5 +1,6 @@
 from django.shortcuts import render
-from django.http import HttpResponse, request
+from django.http import HttpResponse, request, HttpResponseRedirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 
@@ -44,9 +45,11 @@ def modify_person(name, surname, description, id):
                 <input type='submit' value='Zapisz zmiany'><br>
                 <a href='address/'>Dodaj adres</a><br>
                 <a href='email/'>Dodaj email</a><br>
-                <a href='phone/'>Dodaj numer telefonu</a>
+                <a href='phone/'>Dodaj numer telefonu</a><br>
+                <a href='add_to_group/'>Dodaj do grupy</a> <br>
+                <a href='/show/{}'>Powrót</a>
                 </form></body></html>
-            """.format(name, surname, name, surname, description, id, id, id)
+            """.format(name, surname, name, surname, description, id, id, id, id)
     return form
 
 
@@ -169,7 +172,7 @@ def modify_phone(number):
 def create_group():
     form = """
             <html><body><form action='#' method='POST'>
-            Podaj nazwę grupy:
+            Podaj nazwę grupy: <br>
             <label>
                 <input type='text' name='name'>
             </label> <br>
@@ -182,7 +185,7 @@ def create_group():
 def modify_group(group_name):
     form = """
                 <html><body><form action='#' method='POST'>
-                Zmień nazwę grupy:
+                Zmień nazwę grupy: <br>
                 <label>
                     <input type='text' name='name' value={}>
                 </label> <br>
@@ -250,6 +253,7 @@ class PersonDetails(View):
         address = Address.objects.filter(person=person)
         email = Email.objects.filter(person=person)
         phone = Phone.objects.filter(person=person)
+        group = Group.objects.filter(persons=person)
         answer = """
                 <html><body>
                 Szczegóły kontaktu:<br>
@@ -276,7 +280,14 @@ class PersonDetails(View):
                             <a href='/modify/{}/modify_phone'>Edytuj</a>
                             <a href='/modify/{}/delete_phone'>Usuń</a>
                         """.format(i.number, i.get_type_display(), person.id, person.id)
-        answer += "</body></html>"
+        if len(group) > 0:
+            answer += "Grupy: <br><ol>"
+            for one_group in group:
+                answer += """<li>{}</li>
+                        <a href='/modify/{}/{}/delete_from_group'>Usuń z grupy</a>
+                        """.format(one_group.name, person.id, one_group.id)
+            answer += "</ol>"
+        answer += "<br><a href='/all/'>Powrót do listy osób</a></body></html>"
         return HttpResponse(answer)
 
 
@@ -496,7 +507,7 @@ class ModifyGroupName(View):
     def get(self, request, id):
         group = Group.objects.get(id=id)
         response = HttpResponse()
-        response.write(modify_group(group))
+        response.write(modify_group(group.name))
         return response
 
     def post(self, request, id):
@@ -533,10 +544,101 @@ class GroupList(View):
                         <a href='/delete_group/{0}/'>Usuń grupę</a>
                         </li>
                         """.format(group.id, group.name)
-        answer += "</ol> <br> <a href='/all/'>Powrót do listy osób</a></body> </html>"
+        answer += """</ol> <br> 
+                    <a href='/group_search/'>Wyszukaj ludzi w grupach</a><br>
+                    <a href='/all/'>Powrót do listy osób</a>
+                    </body> </html>"""
         return HttpResponse(answer)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class Group(View):
-    pass
+class GroupShow(View):
+    def get(self, request, id):
+        group = Group.objects.get(id=id)
+        person_list = group.persons.all()
+
+        answer = """<html><body>
+                        Grupa {} <br>
+                        Lista osób:<br>
+                        <ol>
+                        """.format(group.name)
+        for person in person_list:
+            person_id = person.id
+            answer += """<li>
+                                    <a href='/show/{0}/'>{1} {2}</a>
+                                    </li>
+                                    """.format(person_id, person.name, person.surname)
+        answer += "</ol> <br> <a href='/all/'>Powrót do listy osób</a></body> </html>"
+        answer += "</ol> <br> <a href='/group_list/'>Powrót do listy grup</a></body> </html>"
+        return HttpResponse(answer)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AddToGroup(View):
+    def get(self, request, id):
+        response = HttpResponse()
+        person = Person.objects.get(id=id)
+        group = Group.objects.all()
+        form = """<html><body><form action='#' method='POST'>
+                    <label>
+                        Dodaj {} {} do grupy:
+                        <select name="group">""".format(person.name, person.surname)
+        for one_group in group:
+            form += "<option value={}>{}</option>".format(one_group.id, one_group.name)
+        form += "</select></label> <br>"
+        form += "<input type='submit' value='Wyślij'>"
+        form += "</form></body></html>"
+        response.write(form)
+        return response
+
+    def post(self, request, id):
+        group_num = int(request.POST.get("group"))
+        person = Person.objects.get(id=id)
+        group = Group.objects.get(id=group_num)
+        group.persons.add(person)
+        answer = "Dodano {} {} do grupy {} <br> <a href='/all/'>Powrót do listy osób</a>".format(person.name,
+                                                                                                 person.surname,
+                                                                                                 group.name)
+        return HttpResponse(answer)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EraseFromGroup(View):
+    def get(self, request, id, id_group):
+        person = Person.objects.get(id=id)
+        group = Group.objects.get(id=id_group)
+        group.persons.remove(person)
+        answer = "Usunięto {} {} z grupy {} <br> <a href='/all/'>Powrót do listy osób</a>".format(person.name,
+                                                                                                 person.surname,
+                                                                                                 group.name)
+        return HttpResponse(answer)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SearchInGroups(View):
+    def get(self, request):
+        response = HttpResponse()
+        answer = "<html><body><form action='#' method='POST'>"
+        answer += " <input name='searching_field' placeholder='Kogo szukasz?'></input>"
+        answer += "<input type='submit' value='Szukaj'>"
+        answer += "</form></body></html>"
+        response.write(answer)
+        return response
+
+    def post(self, request):
+        searching_field = request.POST.get("searching_field")
+        searching_field = searching_field.lower()
+        searching_field = searching_field.capitalize()
+        groups = Group.objects.all()
+        answer = "Znalezione grupy:<br><ul>"
+        i = 1
+        for group in groups:
+            for person in group.persons.all():
+                if person.name == searching_field or person.surname == searching_field:
+                    answer += """<li>{} {} grupa {} </li>
+                                """.format(person.name, person.surname, group.name)
+                    i += 1
+        answer += "</ul> <br> <a href='/group_list/'>Powrót do listy grup</a>"
+        if i < 2:
+            return "No results <br> <a href='/group_list/'>Powrót do listy grup</a>"
+        else:
+            return HttpResponse(answer)

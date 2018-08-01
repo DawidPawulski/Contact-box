@@ -17,7 +17,7 @@ from django.contrib import admin
 from django.urls import path, re_path, include
 from contact.views import AllPeople, NewPerson, ModifyPerson, DeletePerson, PersonDetails, AddAddress, ModifyAddress, \
     DeleteAddress, AddEmail, ModifyEmail, DeleteEmail, AddPhone, ModifyPhone, DeletePhone, CreateGroup, \
-    ModifyGroupName, DeleteGroup, GroupList, Group
+    ModifyGroupName, DeleteGroup, GroupList, GroupShow, AddToGroup, EraseFromGroup, SearchInGroups
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -39,5 +39,8 @@ urlpatterns = [
     re_path(r'^modify_group/(?P<id>\d+)', ModifyGroupName.as_view()),
     re_path(r'^delete_group/(?P<id>\d+)', DeleteGroup.as_view()),
     re_path(r'^group_list/', GroupList.as_view()),
-    re_path(r'^show_group/(?P<id>\d+)', Group.as_view()),
+    re_path(r'^show_group/(?P<id>\d+)', GroupShow.as_view()),
+    re_path(r'^modify/(?P<id>\d+)/add_to_group/', AddToGroup.as_view()),
+    re_path(r'^modify/(?P<id>\d+)/(?P<id_group>\d+)/delete_from_group/', EraseFromGroup.as_view()),
+    re_path(r'^group_search/', SearchInGroups.as_view()),
 ]
